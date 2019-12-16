@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pymongo
-from bj729.logger.log import storage,crawler
-from bj729.db import Config
+from loguru import logger
 # 数据库基本信息
 db_configs = {
     'type': 'mongo',
@@ -45,7 +44,7 @@ class Mongo():
                         {'$set': item},
                         upsert=True)
                 except Exception as e:
-                    storage.error(f"数据插入出错:{e.args},此时的item是:{item}")
+                    logger.error(f"数据插入出错:{e.args},此时的item是:{item}")
         else:
             try:
                 self.db[col].update_one({
@@ -53,7 +52,7 @@ class Mongo():
                     {'$set': items},
                     upsert=True)
             except Exception as e:
-                storage.error(f"数据插入出错:{e.args},此时的item是:{item}")
+                logger.error(f"数据插入出错:{e.args},此时的item是:{item}")
 
 
 if __name__ == '__main__':

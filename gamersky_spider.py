@@ -6,7 +6,8 @@ from loguru import logger
 import requests
 import re
 import hashlib
-from GamerskySpider.DB import mongohelper, mongo
+from lxml import etree
+from DB import mongohelper, mongo
 from types import AsyncGeneratorType
 import os
 
@@ -77,7 +78,7 @@ class Base_Spider():
 class Seed_Spider(Base_Spider):
     def __init__(self):
         self.start_url = "https://www.gamersky.com/"
-
+        self.picture_urls = []
     def get_details_url(self):
         urls = []
         datas = []
@@ -96,30 +97,54 @@ class Seed_Spider(Base_Spider):
             md5hash = hashlib.md5(url.encode("utf-8"))
             id = md5hash.hexdigest()
             dic['id'] = id
-            if id in datas:
-                logger.info('重复数据不插入')
+            if id in datas or not "动态图" in details[1]:
+                logger.info('重复数据或者不是动态图 不插入')
             else:
                 urls.append(dic)
         mongo.Mongo().save_data(urls, 'details_url')
         logger.info(f'保存成功 插入{len(urls)}条数据')
+        urls = mongo.Mongo().find_data('details_url', where={'status': 0})
+        [self.picture_urls.append(data['id']) for data in list(mongo.Mongo().find_data("picture_url"))]
+        [self.get_pirture_url(url) for url in urls]
 
     def get_pirture_url(self, item):
-        dic={}
-        next_page={}
-        url=item['url']
-        response=self.get_session(url)
-        re_response=re.findall('alt="游民星空" src="(.*?)"><br>\n(.*?)</p>',response,re.S)
-        for data in re_response:
-            picture_url=data[0]
-            remake=re.sub('&nbsp;| ','',data[1])
-            print(picture_url,remake)
+        lists = []
+        next_page = {}
+        url = item['url']
+        url='https://www.gamersky.com/ent/201912/1248353_8.shtml'
+        print(url)
+        response = self.get_session(url)
+        print(response)
+        html = etree.HTML(response)
+        html_data = html.xpath('//div[@class="Mid2L_con"]//p[@align="center"]')
+        for i in html_data:
+            dic = {}
+            picture_url = i.xpath('img[@class="picact"]/@src')
+            print(picture_url)
+            try:
+                remark = i.xpath('text()')[0]
+            except IndexError:
+                remark = ''
+            dic['picture_url'] = picture_url
+            dic['remark'] = remark
+            dic['status'] = 0
+            md5hash = hashlib.md5(picture_url.encode("utf-8"))
+            id = md5hash.hexdigest()
+            dic['id'] = id
+
+            if id in self.picture_urls:
+                logger.info('重复数据 不插入')
+            else:
+                lists.append(dic)
+        mongo.Mongo().save_data(lists, 'picture_url')
+        logger.info(f'保存成功 插入{len(lists)}条数据')
         if '下一页' in response:
-            next_page_url=re.search('.*href="(.*?)">下一页',response,re.S).group(1)
-            next_page['url']=next_page_url
+            next_page_url = re.search('.*href="(.*?)">下一页', response, re.S).group(1)
+            next_page['url'] = next_page_url
             self.get_pirture_url(next_page)
+
     def start(self):
-        urls=mongo.Mongo().find_data('details_url',where={'status':0})
-        [self.get_pirture_url(url) for url in urls]
+        self.get_details_url()
 
 
 # class Details_Spder(Base_Spider):
